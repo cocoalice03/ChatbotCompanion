@@ -9,6 +9,8 @@ import { type Message, type WebSocketMessage } from "@shared/schema";
 import ChatMessage from "./ChatMessage";
 import { useQuery } from "@tanstack/react-query";
 
+const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook/chatbot-6";
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -34,7 +36,7 @@ export default function ChatInterface() {
 
     ws.onmessage = (event) => {
       const data: WebSocketMessage = JSON.parse(event.data);
-      
+
       switch (data.type) {
         case 'message':
           setMessages(prev => [...prev, data.payload]);
@@ -74,13 +76,39 @@ export default function ChatInterface() {
     }
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim() || !socket) return;
 
+    // Send message to WebSocket for local display
     socket.send(JSON.stringify({
       type: 'message',
       payload: { content: input }
     }));
+
+    // Send message to n8n webhook
+    try {
+      setIsTyping(true);
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          chatInput: input
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from bot');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get response from bot",
+        variant: "destructive"
+      });
+      setIsTyping(false);
+    }
 
     setInput("");
   };
@@ -104,7 +132,7 @@ export default function ChatInterface() {
           </div>
         )}
       </ScrollArea>
-      
+
       <div className="p-4 border-t">
         <div className="flex gap-2">
           <Input
