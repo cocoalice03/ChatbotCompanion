@@ -1,39 +1,26 @@
-import { Message } from '@shared/schema';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { type Message } from "@shared/schema";
+import ChatMessage from "./ChatMessage";
 
 interface MessageListProps {
   messages: Message[];
 }
 
 export default function MessageList({ messages }: MessageListProps) {
+  if (messages.length === 0) {
+    return (
+      <div className="flex justify-center items-center p-4 text-center h-full min-h-[100px]">
+        <p className="text-muted-foreground text-sm">
+          No messages yet. Start a conversation!
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <>
       {messages.map((message) => (
-        <div
-          key={message.id}
-          className={cn(
-            "flex",
-            message.sender === 'user' ? 'justify-end' : 'justify-start'
-          )}
-        >
-          <div
-            className={cn(
-              "rounded-lg px-4 py-2 max-w-[80%]",
-              message.sender === 'user'
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted"
-            )}
-          >
-            <div>{message.content}</div>
-            {message.timestamp && (
-              <div className="text-xs mt-1 opacity-70">
-                {format(new Date(message.timestamp), 'HH:mm')}
-              </div>
-            )}
-          </div>
-        </div>
+        <ChatMessage key={message.id} message={message} />
       ))}
-    </div>
+    </>
   );
 }
