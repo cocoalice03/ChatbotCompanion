@@ -12,6 +12,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Handle n8n webhook response
   app.post('/api/chat/webhook', async (req, res) => {
     try {
+      console.log('Received webhook response:', req.body);
       const message = insertMessageSchema.parse({
         content: req.body.chatResponse,
         sender: 'bot',
@@ -45,9 +46,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   wss.on('connection', (ws) => {
+    console.log('New WebSocket connection established');
+
     ws.on('message', async (data) => {
       try {
         const parsed = JSON.parse(data.toString());
+        console.log('Received WebSocket message:', parsed);
 
         if (parsed.type === 'message') {
           const message = insertMessageSchema.parse({
@@ -72,9 +76,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Forward message to n8n webhook if URL is provided
           if (parsed.payload.n8nWebhookUrl) {
             try {
+              console.log('Forwarding to n8n:', {
+                chatInput: message.content,
+                sessionId: message.sessionId
+              });
+
               const response = await fetch(parsed.payload.n8nWebhookUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
                 body: JSON.stringify({ 
                   chatInput: message.content,
                   sessionId: message.sessionId
@@ -82,8 +94,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
 
               if (!response.ok) {
-                throw new Error('Failed to forward message to n8n');
+                const errorText = await response.text();
+                console.error('n8n error response:', errorText);
+                throw new Error(`Failed to forward message to n8n: ${errorText}`);
               }
+
+              const responseData = await response.json();
+              console.log('n8n response:', responseData);
+
             } catch (error) {
               console.error('n8n webhook error:', error);
               ws.send(JSON.stringify({

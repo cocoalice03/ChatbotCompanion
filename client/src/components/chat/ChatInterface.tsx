@@ -9,8 +9,8 @@ import { type Message, type WebSocketMessage } from "@shared/schema";
 import ChatMessage from "./ChatMessage";
 import { useQuery } from "@tanstack/react-query";
 
-// n8n webhook URL from the Chatbot_6.json
-const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook-test/chatbot-6";
+// Updated n8n webhook URL
+const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook/chatbot-6";
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,6 +36,10 @@ export default function ChatInterface() {
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
 
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+    };
+
     ws.onmessage = (event) => {
       const data: WebSocketMessage = JSON.parse(event.data);
 
@@ -50,14 +54,15 @@ export default function ChatInterface() {
         case 'error':
           toast({
             title: "Error",
-            description: data.payload,
+            description: data.payload.message,
             variant: "destructive"
           });
           break;
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
       toast({
         title: "Connection Error",
         description: "Failed to connect to chat server",
@@ -81,49 +86,17 @@ export default function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || !socket) return;
 
-    // Send message to WebSocket for local display
+    const sessionId = 'default';
+
+    // Send message through WebSocket
     socket.send(JSON.stringify({
       type: 'message',
-      payload: { content: input }
-    }));
-
-    // Send message to n8n webhook
-    try {
-      setIsTyping(true);
-      console.log("Sending to n8n:", { chatInput: input }); // Debug log
-
-      const response = await fetch(N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          chatInput: input
-        }),
-        mode: 'cors'
-      });
-
-      console.log("n8n response status:", response.status); // Debug log
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("n8n error:", errorText); // Debug log
-        throw new Error(`Failed to get response from bot: ${errorText}`);
+      payload: {
+        content: input,
+        sessionId,
+        n8nWebhookUrl: N8N_WEBHOOK_URL
       }
-
-      const responseData = await response.json();
-      console.log("n8n response data:", responseData); // Debug log
-
-    } catch (error) {
-      console.error("Error sending to n8n:", error); // Debug log
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get response from bot",
-        variant: "destructive"
-      });
-      setIsTyping(false);
-    }
+    }));
 
     setInput("");
   };
@@ -157,7 +130,7 @@ export default function ChatInterface() {
             placeholder="Type a message..."
             className="flex-1"
           />
-          <Button onClick={handleSend} size="icon">
+          <Button onClick={handleSend} size="icon" disabled={!input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
