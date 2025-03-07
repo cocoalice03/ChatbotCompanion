@@ -38,7 +38,7 @@ export default function ChatInterface() {
     const connect = () => {
       try {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.hostname}:5000/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         console.log("Attempting to connect to WebSocket at:", wsUrl);
 
         ws = new WebSocket(wsUrl);

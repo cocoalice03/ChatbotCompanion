@@ -8,10 +8,11 @@ import fetch from "node-fetch";
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Initialize WebSocket server
+  // Initialize WebSocket server with correct configuration
   const wss = new WebSocketServer({ 
     server: httpServer,
-    path: '/ws'
+    path: '/ws',
+    perMessageDeflate: false, // Disable per-message deflate to prevent handshake issues
   });
 
   console.log('WebSocket server initialized on path: /ws');
