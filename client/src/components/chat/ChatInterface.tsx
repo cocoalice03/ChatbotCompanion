@@ -9,7 +9,8 @@ import { type Message, type WebSocketMessage } from "@shared/schema";
 import ChatMessage from "./ChatMessage";
 import { useQuery } from "@tanstack/react-query";
 
-const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook/chatbot-6";
+// n8n webhook URL from the Chatbot_6.json
+const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook-test/chatbot-6";
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -88,23 +89,36 @@ export default function ChatInterface() {
     // Send message to n8n webhook
     try {
       setIsTyping(true);
+      console.log("Sending to n8n:", { chatInput: input }); // Debug log
+
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           chatInput: input
-        })
+        }),
+        mode: 'cors'
       });
 
+      console.log("n8n response status:", response.status); // Debug log
+
       if (!response.ok) {
-        throw new Error('Failed to get response from bot');
+        const errorText = await response.text();
+        console.error("n8n error:", errorText); // Debug log
+        throw new Error(`Failed to get response from bot: ${errorText}`);
       }
+
+      const responseData = await response.json();
+      console.log("n8n response data:", responseData); // Debug log
+
     } catch (error) {
+      console.error("Error sending to n8n:", error); // Debug log
       toast({
         title: "Error",
-        description: "Failed to get response from bot",
+        description: error instanceof Error ? error.message : "Failed to get response from bot",
         variant: "destructive"
       });
       setIsTyping(false);
