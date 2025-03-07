@@ -3,10 +3,10 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Message, WebSocketMessage, ChatWidgetConfig } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { MessageList } from './MessageList';
-import { ChatInput } from './ChatInput';
 import { useToast } from '@/hooks/use-toast';
-import { MessageSquare, X, Minimize2 } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
+import MessageList from './MessageList';
+import { ChatInput } from './ChatInput';
 
 interface ChatWidgetProps {
   config: ChatWidgetConfig;
@@ -89,7 +89,7 @@ export function ChatWidget({ config }: ChatWidgetProps) {
   }
 
   return (
-    <Card 
+    <Card
       className={`fixed ${config.position === 'bottom-left' ? 'left-4' : 'right-4'} bottom-4 w-[400px] h-[600px] flex flex-col shadow-lg`}
       data-theme={config.theme}
     >

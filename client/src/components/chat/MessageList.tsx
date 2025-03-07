@@ -1,11 +1,12 @@
 import { Message } from '@shared/schema';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 interface MessageListProps {
   messages: Message[];
 }
 
-export function MessageList({ messages }: MessageListProps) {
+export default function MessageList({ messages }: MessageListProps) {
   return (
     <div className="space-y-4">
       {messages.map((message) => (
@@ -27,7 +28,7 @@ export function MessageList({ messages }: MessageListProps) {
             <div>{message.content}</div>
             {message.timestamp && (
               <div className="text-xs mt-1 opacity-70">
-                {new Date(message.timestamp).toLocaleTimeString()}
+                {format(new Date(message.timestamp), 'HH:mm')}
               </div>
             )}
           </div>

@@ -6,9 +6,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Message, type WebSocketMessage } from "@shared/schema";
-import ChatMessage from "./ChatMessage";
-import { ConfigPanel } from "./ConfigPanel";
 import { useQuery } from "@tanstack/react-query";
+import { ConfigPanel } from "./ConfigPanel";
+import MessageList from "./MessageList";
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -141,11 +141,10 @@ export default function ChatInterface() {
     }
 
     try {
-      const messageContent = input.trim();
       socket.send(JSON.stringify({
         type: 'message',
         payload: {
-          content: messageContent,
+          content: input.trim(),
           sessionId: 'default',
           n8nWebhookUrl
         }
@@ -177,9 +176,7 @@ export default function ChatInterface() {
 
       <Card className="w-full max-w-md mx-auto h-[600px] flex flex-col">
         <ScrollArea ref={scrollRef} className="flex-1 p-4">
-          {messages.map((message, i) => (
-            <ChatMessage key={i} message={message} />
-          ))}
+          <MessageList messages={messages} />
           {isTyping && (
             <div className="text-sm text-muted-foreground italic">
               Bot is typing...
