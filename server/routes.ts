@@ -7,7 +7,14 @@ import fetch from "node-fetch";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  // Initialize WebSocket server
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    path: '/ws'
+  });
+
+  console.log('WebSocket server initialized on path: /ws');
 
   // Handle n8n webhook response
   app.post('/api/chat/webhook', async (req, res) => {
@@ -41,12 +48,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/chat/messages', async (req, res) => {
     const sessionId = req.query.sessionId as string || 'default';
-    const messages = await storage.getMessages(sessionId);
-    res.json(messages);
+    try {
+      const messages = await storage.getMessages(sessionId);
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ error: 'Failed to fetch messages' });
+    }
   });
 
-  wss.on('connection', (ws) => {
-    console.log('New WebSocket connection established');
+  // WebSocket connection handling
+  wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection established from:', req.socket.remoteAddress);
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
 
     ws.on('message', async (data) => {
       try {
@@ -76,12 +93,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Forward message to n8n webhook if URL is provided
           if (parsed.payload.n8nWebhookUrl) {
             try {
+              // Validate webhook URL format
+              const webhookUrl = new URL(parsed.payload.n8nWebhookUrl);
               console.log('Forwarding to n8n:', {
+                url: webhookUrl.toString(),
                 chatInput: message.content,
                 sessionId: message.sessionId
               });
 
-              const response = await fetch(parsed.payload.n8nWebhookUrl, {
+              const response = await fetch(webhookUrl.toString(), {
                 method: 'POST',
                 headers: { 
                   'Content-Type': 'application/json',
@@ -96,7 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (!response.ok) {
                 const errorText = await response.text();
                 console.error('n8n error response:', errorText);
-                throw new Error(`Failed to forward message to n8n: ${errorText}`);
+                throw new Error(`n8n server returned error: ${response.status} - ${errorText}`);
               }
 
               const responseData = await response.json();
@@ -104,21 +124,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             } catch (error) {
               console.error('n8n webhook error:', error);
+              let errorMessage = "Failed to process message with n8n";
+
+              if (error instanceof TypeError && error.message.includes('Invalid URL')) {
+                errorMessage = "Invalid n8n webhook URL format";
+              } else if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+                errorMessage = "Could not connect to n8n server. Please check if the URL is correct and accessible.";
+              } else if (error instanceof Error && error.message.includes('n8n server returned error')) {
+                errorMessage = error.message;
+              }
+
               ws.send(JSON.stringify({
                 type: 'error',
-                payload: { message: 'Failed to process message with n8n' }
+                payload: { message: errorMessage }
               }));
             }
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { message: "n8n webhook URL is required" }
+            }));
           }
         }
       } catch (error) {
-        console.error('WebSocket error:', error);
+        console.error('WebSocket message handling error:', error);
         ws.send(JSON.stringify({
           type: 'error',
           payload: { message: 'Invalid message format' }
         }));
       }
     });
+
+    // Send initial connection success message
+    ws.send(JSON.stringify({
+      type: 'system',
+      payload: { message: 'Connected to chat server' }
+    }));
   });
 
   return httpServer;

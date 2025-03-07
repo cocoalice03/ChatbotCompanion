@@ -7,76 +7,121 @@ import { Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { type Message, type WebSocketMessage } from "@shared/schema";
 import ChatMessage from "./ChatMessage";
+import { ConfigPanel } from "./ConfigPanel";
 import { useQuery } from "@tanstack/react-query";
-
-// Updated n8n webhook URL
-const N8N_WEBHOOK_URL = "https://automated-ai.n8n.cloud/webhook/chatbot-6";
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [n8nWebhookUrl, setN8nWebhookUrl] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const { data: initialMessages } = useQuery<Message[]>({
+  const { data: initialMessages = [] } = useQuery<Message[]>({
     queryKey: ['/api/chat/messages'],
-    initialData: [],
   });
 
   useEffect(() => {
-    if (initialMessages) {
+    if (initialMessages.length > 0) {
       setMessages(initialMessages);
     }
   }, [initialMessages]);
 
+  // WebSocket connection
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket;
+    let reconnectTimeout: NodeJS.Timeout;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-    };
+    const connect = () => {
+      try {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.hostname}:5000/ws`;
+        console.log("Attempting to connect to WebSocket at:", wsUrl);
 
-    ws.onmessage = (event) => {
-      const data: WebSocketMessage = JSON.parse(event.data);
+        ws = new WebSocket(wsUrl);
 
-      switch (data.type) {
-        case 'message':
-          setMessages(prev => [...prev, data.payload]);
-          setIsTyping(false);
-          break;
-        case 'typing':
-          setIsTyping(true);
-          break;
-        case 'error':
+        ws.onopen = () => {
+          console.log("WebSocket connected successfully");
+          setIsConnected(true);
           toast({
-            title: "Error",
-            description: data.payload.message,
+            title: "Connected",
+            description: "Chat server connection established",
+          });
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket connection closed");
+          setIsConnected(false);
+          setSocket(null);
+          // Attempt to reconnect after 3 seconds
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data: WebSocketMessage = JSON.parse(event.data);
+            console.log("Received WebSocket message:", data);
+
+            switch (data.type) {
+              case 'message':
+                setMessages(prev => [...prev, data.payload]);
+                setIsTyping(false);
+                break;
+              case 'typing':
+                setIsTyping(true);
+                break;
+              case 'error':
+                toast({
+                  title: "Chat Error",
+                  description: data.payload.message || "Failed to process message",
+                  variant: "destructive"
+                });
+                setIsTyping(false);
+                break;
+              case 'system':
+                console.log("System message:", data.payload.message);
+                break;
+            }
+          } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          toast({
+            title: "Connection Error",
+            description: "Failed to connect to chat server. Retrying...",
             variant: "destructive"
           });
-          break;
+        };
+
+        setSocket(ws);
+      } catch (error) {
+        console.error("Error creating WebSocket:", error);
+        setIsConnected(false);
+        // Attempt to reconnect after error
+        reconnectTimeout = setTimeout(connect, 3000);
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      toast({
-        title: "Connection Error",
-        description: "Failed to connect to chat server",
-        variant: "destructive"
-      });
-    };
-
-    setSocket(ws);
+    connect();
 
     return () => {
-      ws.close();
+      console.log("Cleaning up WebSocket connection");
+      if (ws) {
+        ws.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
     };
   }, []);
 
+  // Scroll to bottom when messages change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -84,21 +129,36 @@ export default function ChatInterface() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || !socket) return;
+    if (!input.trim() || !socket || !isConnected) return;
 
-    const sessionId = 'default';
+    if (!n8nWebhookUrl) {
+      toast({
+        title: "Configuration Needed",
+        description: "Please configure your n8n webhook URL first.",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    // Send message through WebSocket
-    socket.send(JSON.stringify({
-      type: 'message',
-      payload: {
-        content: input,
-        sessionId,
-        n8nWebhookUrl: N8N_WEBHOOK_URL
-      }
-    }));
-
-    setInput("");
+    try {
+      const messageContent = input.trim();
+      socket.send(JSON.stringify({
+        type: 'message',
+        payload: {
+          content: messageContent,
+          sessionId: 'default',
+          n8nWebhookUrl
+        }
+      }));
+      setInput("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast({
+        title: "Send Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -109,32 +169,49 @@ export default function ChatInterface() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto h-[600px] flex flex-col">
-      <ScrollArea ref={scrollRef} className="flex-1 p-4">
-        {messages.map((message, i) => (
-          <ChatMessage key={i} message={message} />
-        ))}
-        {isTyping && (
-          <div className="text-sm text-muted-foreground italic">
-            Bot is typing...
-          </div>
-        )}
-      </ScrollArea>
+    <div className="space-y-4">
+      <ConfigPanel
+        onSave={setN8nWebhookUrl}
+        defaultUrl={n8nWebhookUrl}
+      />
 
-      <div className="p-4 border-t">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            className="flex-1"
-          />
-          <Button onClick={handleSend} size="icon" disabled={!input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
+      <Card className="w-full max-w-md mx-auto h-[600px] flex flex-col">
+        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+          {messages.map((message, i) => (
+            <ChatMessage key={i} message={message} />
+          ))}
+          {isTyping && (
+            <div className="text-sm text-muted-foreground italic">
+              Bot is typing...
+            </div>
+          )}
+        </ScrollArea>
+
+        <div className="p-4 border-t">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type a message..."
+              className="flex-1"
+              disabled={!isConnected}
+            />
+            <Button 
+              onClick={handleSend} 
+              size="icon" 
+              disabled={!input.trim() || !n8nWebhookUrl || !isConnected}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          {!isConnected && (
+            <div className="text-sm text-destructive mt-2">
+              Connecting to chat server...
+            </div>
+          )}
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }

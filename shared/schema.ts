@@ -22,7 +22,7 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 
 export type WebSocketMessage = {
-  type: 'message' | 'typing' | 'error' | 'n8n_response';
+  type: 'message' | 'typing' | 'error' | 'n8n_response' | 'system';
   payload: any;
 };
 
