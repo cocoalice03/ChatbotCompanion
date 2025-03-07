@@ -20,8 +20,9 @@ export default function ChatInterface() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const { data: initialMessages } = useQuery({
+  const { data: initialMessages } = useQuery<Message[]>({
     queryKey: ['/api/chat/messages'],
+    initialData: [],
   });
 
   useEffect(() => {

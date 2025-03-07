@@ -108,7 +108,7 @@ export function ChatWidget({ config }: ChatWidgetProps) {
 
       <div className="p-4 border-t">
         <ChatInput
-          onSend={async (content) => {
+          onSend={async (content: string) => {
             try {
               await sendMessage(content);
             } catch (error) {

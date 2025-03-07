@@ -2,7 +2,7 @@ import { messages, type Message, type InsertMessage } from "@shared/schema";
 
 export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
-  getMessages(): Promise<Message[]>;
+  getMessages(sessionId: string): Promise<Message[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -19,14 +19,16 @@ export class MemStorage implements IStorage {
       id: this.currentId++,
       content: insertMessage.content,
       sender: insertMessage.sender,
-      timestamp: new Date()
+      timestamp: new Date(),
+      sessionId: insertMessage.sessionId,
+      metadata: insertMessage.metadata
     };
     this.messages.push(message);
     return message;
   }
 
-  async getMessages(): Promise<Message[]> {
-    return this.messages;
+  async getMessages(sessionId: string): Promise<Message[]> {
+    return this.messages.filter(msg => msg.sessionId === sessionId);
   }
 }
 

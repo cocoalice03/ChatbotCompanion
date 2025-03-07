@@ -24,7 +24,12 @@ export function MessageList({ messages }: MessageListProps) {
                 : "bg-muted"
             )}
           >
-            {message.content}
+            <div>{message.content}</div>
+            {message.timestamp && (
+              <div className="text-xs mt-1 opacity-70">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </div>
+            )}
           </div>
         </div>
       ))}
